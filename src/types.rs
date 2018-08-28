@@ -84,6 +84,7 @@ pub struct Config {
     pub abs: bool,
     pub web_addr: String,
     pub web_port: u16,
+    pub dedup: bool,
     errors: Vec<&'static str>
 }
 
@@ -104,7 +105,7 @@ impl Config {
             rows_examined_max: -1,
             rows_affected_min: -1,
             rows_affected_max: -1,
-            sort_type: QueriesSortType::Timestamp,
+            sort_type: QueriesSortType::Undefined,
             regex: None,
             count_min: 0,
             count_max: 0,
@@ -112,6 +113,7 @@ impl Config {
             abs: false,
             web_addr: String::new(),
             web_port: 0,
+            dedup: false,
             errors: Vec::new()
         }
     }

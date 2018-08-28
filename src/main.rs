@@ -130,7 +130,7 @@ fn configure() -> Result<(), String> {
     let mut cnf = config.lock().unwrap();
 
     let matches = App::new("MySQL slow log parser")
-        .version("1.1.5")
+        .version("1.1.6")
         .author("Developed by Alexander Kozharsky <a.kozharsky@southbridge.io>
 Copyright (c) Southbridge, LLC https://southbridge.io")
         .about("Parses MySQL slow log very fast")
@@ -246,6 +246,10 @@ Copyright (c) Southbridge, LLC https://southbridge.io")
             .help("Run web server on <ADDR:PORT>
 If ADDR omitted, then listen on 127.0.0.1
 Port 0 (zero) to disable feature (disabled by default)"))
+        .arg(Arg::with_name("dedup")
+            .short("d")
+            .long("dedup")
+            .help("Remove query duplicates. Shows only last query"))
         .get_matches();
 
     cnf.log_file = matches.value_of("file").unwrap_or("mysql-slow.log").to_string();
@@ -402,6 +406,7 @@ Port 0 (zero) to disable feature (disabled by default)"))
     }
 
     cnf.abs = matches.occurrences_of("abstract") > 0;
+    cnf.dedup = matches.occurrences_of("dedup") > 0;
 
     let sort_type = &*matches.value_of("sort_type").unwrap_or("ts").to_string();
 

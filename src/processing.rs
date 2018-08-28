@@ -13,6 +13,10 @@ fn sort(qq: &mut Vec<Query>) {
     let cnf = config.lock().unwrap();
 
     match cnf.sort_type {
+        QueriesSortType::Timestamp =>
+            qq.sort_by(|lhs, rhs|
+                lhs.timestamp.partial_cmp(&rhs.timestamp).unwrap()),
+
         QueriesSortType::QueryTime =>
             qq.sort_by(|lhs, rhs|
                 lhs.query_time.partial_cmp(&rhs.query_time).unwrap()),
@@ -98,25 +102,55 @@ fn filter(qq: &Vec<Query>, mapflt: &mut usize) -> Vec<Query> {
     }).cloned().collect()
 }
 
+fn make_dedup_hash(qq: &Vec<Query>) -> HashMap<&String, &Query> {
+    let mut dedup_hash: HashMap<&String, &Query> = HashMap::new();
+
+    for q in qq.iter() {
+        if !dedup_hash.get(&q.query).is_none() {
+            dedup_hash.remove(&q.query);
+        }
+
+        dedup_hash.insert(&q.query, q);
+    }
+
+    dedup_hash
+}
+
 pub fn process(qq: &mut Vec<Query>, web: bool) {
-//    let mut qhash: HashMap<String, usize> = HashMap::new();
     let mut mapflt: usize = 0;
 
-    sort(qq);
+//    sort(qq);
 
-    let mut new_qq = filter(qq, &mut mapflt);
+    let mut queries_hash = qhash.lock().unwrap();
+
+    queries_hash.clear();
+
+    for q in qq.iter() {
+        let count = queries_hash.entry(q.query.clone()).or_insert(0);
+        *count += 1;
+    }
+
+
+    let mut new_qq = {
+        if  config.lock().unwrap().dedup {
+            let mut dedup_hash = make_dedup_hash(&qq);
+            let mut dedupd_qq: Vec<Query> = Vec::new();
+
+            for (_, &q) in dedup_hash.iter() {
+                dedupd_qq.push(q.clone());
+            }
+
+//            sort(&mut dedupd_qq);
+            filter(&dedupd_qq, &mut mapflt)
+        } else {
+            filter(qq, &mut mapflt)
+        }
+    };
+
+    sort(&mut new_qq);
     let cnf = config.lock().unwrap();
 
     {
-        let mut queries_hash = qhash.lock().unwrap();
-
-        queries_hash.clear();
-
-        for q in new_qq.iter() {
-            let count = queries_hash.entry(q.query.clone()).or_insert(0);
-            *count += 1;
-        }
-
         match cnf.sort_type {
             QueriesSortType::Count =>
                 new_qq.sort_by(|lhs, rhs|
@@ -133,8 +167,6 @@ pub fn process(qq: &mut Vec<Query>, web: bool) {
     }
 
     if !web {
-        let queries_hash = qhash.lock().unwrap();
-
         for (index, q) in new_qq.iter().enumerate() {
             let count = queries_hash.get(&q.query).unwrap();
 
