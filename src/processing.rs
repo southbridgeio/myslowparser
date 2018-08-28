@@ -2,10 +2,15 @@ use types::Query;
 use super::config;
 use types::QueriesSortType;
 use std::collections::HashMap;
+use web::wqq;
+use std::sync::Mutex;
 
-pub fn process(qq: &mut Vec<Query>) {
+lazy_static! {
+    pub static ref qhash: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+}
+
+fn sort(qq: &mut Vec<Query>) {
     let cnf = config.lock().unwrap();
-    let mut qhash: HashMap<String, usize> = HashMap::new();
 
     match cnf.sort_type {
         QueriesSortType::QueryTime =>
@@ -54,10 +59,12 @@ pub fn process(qq: &mut Vec<Query>) {
 
         _ => {}
     }
+}
 
-    let mut mapflt: usize = 0;
+fn filter(qq: &Vec<Query>, mapflt: &mut usize) -> Vec<Query> {
+    let cnf = config.lock().unwrap();
 
-    let mut new_qq: Vec<&Query> = qq.iter().filter(|q| {
+    qq.into_iter().filter(|q| {
         let not_filtered = q.timestamp >= cnf.timestamp_begin &&
             q.timestamp < cnf.timestamp_end &&
             q.query_time >= cnf.query_time_min &&
@@ -76,7 +83,7 @@ pub fn process(qq: &mut Vec<Query>) {
                 let not_filter = !regex.find(&q.query).is_none();
 
                 if !not_filter {
-                    mapflt += 1;
+                    *mapflt += 1;
                 }
 
                 return not_filter;
@@ -84,49 +91,79 @@ pub fn process(qq: &mut Vec<Query>) {
         }
 
         if !not_filtered {
-            mapflt += 1;
+            *mapflt += 1;
         }
 
         not_filtered
-    }).collect();
+    }).cloned().collect()
+}
 
-    for &q in &new_qq {
-        let count = qhash.entry(q.query.clone()).or_insert(0);
-        *count += 1;
-    }
+pub fn process(qq: &mut Vec<Query>, web: bool) {
+//    let mut qhash: HashMap<String, usize> = HashMap::new();
+    let mut mapflt: usize = 0;
 
-    match cnf.sort_type {
-        QueriesSortType::Count =>
-            new_qq.sort_by(|lhs, rhs|
-                (*qhash.get(&lhs.query).unwrap())
-                    .partial_cmp(qhash.get(&rhs.query).unwrap()).unwrap()),
+    sort(qq);
 
-        QueriesSortType::CountInverse =>
-            new_qq.sort_by(|lhs, rhs|
-                (*qhash.get(&rhs.query).unwrap())
-                    .partial_cmp(qhash.get(&lhs.query).unwrap()).unwrap()),
+    let mut new_qq = filter(qq, &mut mapflt);
+    let cnf = config.lock().unwrap();
 
-        _ => {}
-    }
+    {
+        let mut queries_hash = qhash.lock().unwrap();
 
-    for (index, &q) in new_qq.iter().enumerate() {
-        let count = qhash.get(&q.query).unwrap();
+        queries_hash.clear();
 
-        if *count >= cnf.count_min && *count <= cnf.count_max {
-            println!("{}", q.to_string(index + 1, *count));
+        for q in new_qq.iter() {
+            let count = queries_hash.entry(q.query.clone()).or_insert(0);
+            *count += 1;
         }
 
-        if index == cnf.limit {
-            break;
+        match cnf.sort_type {
+            QueriesSortType::Count =>
+                new_qq.sort_by(|lhs, rhs|
+                    (*queries_hash.get(&lhs.query).unwrap())
+                        .partial_cmp(queries_hash.get(&rhs.query).unwrap()).unwrap()),
+
+            QueriesSortType::CountInverse =>
+                new_qq.sort_by(|lhs, rhs|
+                    (*queries_hash.get(&rhs.query).unwrap())
+                        .partial_cmp(queries_hash.get(&lhs.query).unwrap()).unwrap()),
+
+            _ => {}
         }
     }
 
-    println!("TOTAL: {}", qq.len());
+    if !web {
+        let queries_hash = qhash.lock().unwrap();
 
-    let filtered = (if new_qq.len() < cnf.limit { 0 } else { qq.len() - new_qq.len() }) +
-        (if cnf.limit < new_qq.len() && (new_qq.len() - cnf.limit) > 0 { new_qq.len() - cnf.limit - 1 } else { 0 }) + mapflt;
+        for (index, q) in new_qq.iter().enumerate() {
+            let count = queries_hash.get(&q.query).unwrap();
 
-    if filtered > 0 {
-        println!("FILTERED: {}", filtered.to_string());
+            if *count >= cnf.count_min && *count <= cnf.count_max {
+                println!("{}", q.to_string(index + 1, *count));
+            }
+
+            if index == cnf.limit {
+                break;
+            }
+        }
     }
+
+    if web {
+        let mut web_queries = wqq.lock().unwrap();
+
+        web_queries.clear();
+        web_queries.append(&mut new_qq);
+    } else {
+        println!("TOTAL: {}", qq.len());
+
+        let filtered = (if new_qq.len() < cnf.limit { 0 } else { qq.len() - new_qq.len() }) +
+            (if cnf.limit < new_qq.len() && (new_qq.len() - cnf.limit) > 0 { new_qq.len() - cnf.limit - 1 } else { 0 }) + mapflt;
+
+        if filtered > 0 {
+            println!("FILTERED: {}", filtered.to_string());
+        }
+    }
+
+    qq.clear();
+    new_qq.clear();
 }

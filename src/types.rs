@@ -170,6 +170,7 @@ impl ToString for Config {
     }
 }
 
+#[derive(Clone)]
 pub struct Query {
     pub timestamp: i64,
     pub db: String,

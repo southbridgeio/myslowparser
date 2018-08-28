@@ -20,6 +20,8 @@ use chrono::prelude::Utc;
 use clap::{App, Arg};
 use types::{Query, Config, QueriesSortType};
 use regex::Regex;
+use std::thread::sleep;
+use std::time::Duration;
 
 lazy_static! {
     static ref queries: Mutex<Vec<Query>> = Mutex::new(Vec::new());
@@ -38,13 +40,28 @@ fn main() {
         _ => {}
     }
 
-    let log_file;
+    read_queries(false);
 
     {
+        let mut qq = queries.lock().unwrap();
+        processing::process(&mut qq, false);
+    }
+
+    {
+        if config.lock().unwrap().web_port > 0 {
+            web::invoke_web();
+        }
+    }
+}
+
+fn read_queries(background: bool) {
+    const SLEEP_TIME: Duration = Duration::from_millis(10);
+
+    let log_file = {
         let cnf = config.lock().unwrap();
 
-        log_file = cnf.log_file.clone();
-    }
+        cnf.log_file.clone()
+    };
 
     let file = match File::open(&log_file) {
         Ok(file) => file,
@@ -56,7 +73,7 @@ fn main() {
 
     let mut buf: [u8; 1] = [0];
     let mut reader = BufReader::new(&file);
-    let mut line = "".to_string();
+    let mut line = String::new();
     let mut new_query = Query::new();
     let mut server_info = String::new();
     let mut server_info_consumed = false;
@@ -89,30 +106,23 @@ fn main() {
                     qq.insert(query_index, new_query);
                 }
 
+                if background {
+                    sleep(SLEEP_TIME);
+                }
+
                 new_query = Query::new();
             }
 
-            line = "".to_string();
+            line = String::new();
         } else {
             line += &String::from_utf8_lossy(&buf);
         }
     }
 
-    if server_info.len() > 0 {
+    if server_info.len() > 0 && !background {
         let si_split: Vec<&str> = server_info.split("\n").collect();
         let info_string = si_split[0].to_string();
         println!("SERVER INFO: {}\n", info_string.replace(". started with:", ""));
-    }
-
-    let mut qq = queries.lock().unwrap();
-    processing::process(&mut qq);
-
-    {
-        let cnf = config.lock().unwrap();
-
-        if cnf.web_port > 0 {
-            web::invoke_web();
-        }
     }
 }
 
@@ -201,8 +211,7 @@ Copyright (c) Southbridge, LLC https://southbridge.io")
   rei  - Rows examined inverse
   rai  - Rows affected inverse
   cnt  - Count
-  cnti - Count inverse")
-        )
+  cnti - Count inverse"))
         .arg(Arg::with_name("query_regex")
             .short("r")
             .long("query_regex")
