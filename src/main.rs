@@ -130,7 +130,7 @@ fn configure() -> Result<(), String> {
     let mut cnf = config.lock().unwrap();
 
     let matches = App::new("MySQL slow log parser")
-        .version("1.1.4")
+        .version("1.1.5")
         .author("Developed by Alexander Kozharsky <a.kozharsky@southbridge.io>
 Copyright (c) Southbridge, LLC https://southbridge.io")
         .about("Parses MySQL slow log very fast")
