@@ -1,8 +1,7 @@
 # myslowparser
 MySQL slow log parser
 
-```$ myslowparser -h
-MySQL slow log parser 1.1.4
+```MySQL slow log parser 1.1.5
 Developed by Alexander Kozharsky <a.kozharsky@southbridge.io>
 Copyright (c) Southbridge, LLC https://southbridge.io
 Parses MySQL slow log very fast
@@ -12,6 +11,7 @@ USAGE:
 
 FLAGS:
     -a, --abstract     Abstact strings to |STRING|, numbers to |NUMBER|
+    -d, --dedup        Remove query duplicates. Shows only last query
     -h, --help         Prints help information
     -p, --print_cfg    Print current configuration
     -V, --version      Prints version information
@@ -54,4 +54,5 @@ OPTIONS:
                                           format: Unix timestamp or DD/MM/YYYY
     -w, --web <ADDR:PORT>               Run web server on <ADDR:PORT>
                                         If ADDR omitted, then listen on 127.0.0.1
-                                        Port 0 (zero) to disable feature (disabled by default)```
+                                        Port 0 (zero) to disable feature (disabled by default)
+```
