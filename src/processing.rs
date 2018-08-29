@@ -4,6 +4,7 @@ use types::QueriesSortType;
 use std::collections::HashMap;
 use web::wqq;
 use std::sync::Mutex;
+use std::thread::sleep;
 
 lazy_static! {
     pub static ref qhash: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
@@ -118,16 +119,15 @@ fn make_dedup_hash(qq: &Vec<Query>) -> HashMap<&String, &Query> {
 
 pub fn process(qq: &mut Vec<Query>, web: bool) {
     let mut mapflt: usize = 0;
-
-//    sort(qq);
-
     let mut queries_hash = qhash.lock().unwrap();
+    let wdelay = config.lock().unwrap().wpd;
 
     queries_hash.clear();
 
     for q in qq.iter() {
         let count = queries_hash.entry(q.query.clone()).or_insert(0);
         *count += 1;
+        sleep(wdelay);
     }
 
 
@@ -140,7 +140,6 @@ pub fn process(qq: &mut Vec<Query>, web: bool) {
                 dedupd_qq.push(q.clone());
             }
 
-//            sort(&mut dedupd_qq);
             filter(&dedupd_qq, &mut mapflt)
         } else {
             filter(qq, &mut mapflt)
@@ -166,7 +165,12 @@ pub fn process(qq: &mut Vec<Query>, web: bool) {
         }
     }
 
-    if !web {
+    if web {
+        let mut web_queries = wqq.lock().unwrap();
+
+        web_queries.clear();
+        web_queries.append(&mut new_qq);
+    } else {
         for (index, q) in new_qq.iter().enumerate() {
             let count = queries_hash.get(&q.query).unwrap();
 
@@ -178,14 +182,7 @@ pub fn process(qq: &mut Vec<Query>, web: bool) {
                 break;
             }
         }
-    }
 
-    if web {
-        let mut web_queries = wqq.lock().unwrap();
-
-        web_queries.clear();
-        web_queries.append(&mut new_qq);
-    } else {
         println!("TOTAL: {}", qq.len());
 
         let filtered = (if new_qq.len() < cnf.limit { 0 } else { qq.len() - new_qq.len() }) +

@@ -2,6 +2,7 @@ use chrono::TimeZone;
 use chrono::prelude::Utc;
 use std::sync::Mutex;
 use regex::Regex;
+use std::time::Duration;
 
 struct QueryStore {
     pub db: String,
@@ -85,6 +86,7 @@ pub struct Config {
     pub web_addr: String,
     pub web_port: u16,
     pub dedup: bool,
+    pub wpd: Duration,
     errors: Vec<&'static str>
 }
 
@@ -114,6 +116,7 @@ impl Config {
             web_addr: String::new(),
             web_port: 0,
             dedup: false,
+            wpd: Duration::from_millis(1),
             errors: Vec::new()
         }
     }
@@ -153,7 +156,8 @@ impl ToString for Config {
 \tLimit: first {}
 \tStr & num abstract: {}
 \tWeb address: \"{}\"
-\tWeb port: {}",
+\tWeb port: {}
+\tDeduplication: {}",
         self.log_file,
         self.db,
         self.timestamp_begin, self.timestamp_end,
@@ -168,7 +172,8 @@ impl ToString for Config {
         if self.limit < super::std::usize::MAX { self.limit + 1 } else { self.limit },
         self.abs,
         self.web_addr,
-        self.web_port)
+        self.web_port,
+        self.dedup)
     }
 }
 

@@ -55,13 +55,13 @@ fn main() {
 }
 
 fn read_queries(background: bool) {
-    const SLEEP_TIME: Duration = Duration::from_millis(10);
-
     let log_file = {
         let cnf = config.lock().unwrap();
 
         cnf.log_file.clone()
     };
+
+    let wdelay = config.lock().unwrap().wpd;
 
     let file = match File::open(&log_file) {
         Ok(file) => file,
@@ -107,7 +107,7 @@ fn read_queries(background: bool) {
                 }
 
                 if background {
-                    sleep(SLEEP_TIME);
+                    sleep(wdelay);
                 }
 
                 new_query = Query::new();
@@ -130,7 +130,7 @@ fn configure() -> Result<(), String> {
     let mut cnf = config.lock().unwrap();
 
     let matches = App::new("MySQL slow log parser")
-        .version("1.1.6")
+        .version("1.1.7")
         .author("Developed by Alexander Kozharsky <a.kozharsky@southbridge.io>
 Copyright (c) Southbridge, LLC https://southbridge.io")
         .about("Parses MySQL slow log very fast")
@@ -250,6 +250,10 @@ Port 0 (zero) to disable feature (disabled by default)"))
             .short("d")
             .long("dedup")
             .help("Remove query duplicates. Shows only last query"))
+        .arg(Arg::with_name("wpd")
+            .long("wpd")
+            .value_name("MILLIS")
+            .help("Set queries background parse delay in web mode"))
         .get_matches();
 
     cnf.log_file = matches.value_of("file").unwrap_or("mysql-slow.log").to_string();
@@ -389,6 +393,12 @@ Port 0 (zero) to disable feature (disabled by default)"))
         } else {
             cnf.add_error("Invalid query regex provided");
         }
+    }
+
+    if let Ok(wpd) = matches.value_of("wpd").unwrap_or("1").parse::<u64>() {
+        cnf.wpd = Duration::from_millis(wpd);
+    } else {
+        cnf.add_error("Web parse delay syntax error");
     }
 
     let web = matches.value_of("web").unwrap_or("0").to_string();
